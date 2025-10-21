@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+    <title>VR Memory Match Game</title>
+</head>
+<body>
+    <a-scene background="color: #001122" 
+             cursor="rayOrigin: mouse" 
+             vr-mode-ui="enabled: true"
+             renderer="antialias: true">
+        
+        <!-- VR Hand Controllers -->
+        <a-entity id="leftHand" 
+                  hand-controls="hand: left; handModelStyle: lowPoly; color: #ffcccc"
+                  laser-controls="hand: left"
+                  raycaster="objects: [cursor-listener]; far: 20">
+        </a-entity>
+        
+        <a-entity id="rightHand" 
+                  hand-controls="hand: right; handModelStyle: lowPoly; color: #ccffcc"
+                  laser-controls="hand: right"
+                  raycaster="objects: [cursor-listener]; far: 20">
+        </a-entity>
+
+        <!-- Timer Display -->
+        <a-text id="timerText" 
+                position="0 11 -2.5" 
+                align="center" 
+                color="red" 
+                value="Time: 60"
+                scale="3 3 3">
+        </a-text>
+        
+        <!-- Score Display -->
+        <a-text id="scoreText" 
+                position="0 9.5 -2.5" 
+                align="center" 
+                color="lime" 
+                value="Score: 0 | Matches: 0/10"
+                scale="2.5 2.5 2.5">
+        </a-text>
+        
+        <!-- Game Status -->
+        <a-text id="statusText" 
+                position="0 8 -2.5" 
+                align="center" 
+                color="yellow" 
+                value="Click any card to start!"
+                scale="2 2 2">
+        </a-text>
+        
+        <!-- Start Button -->
+        <a-box id="startButton"
+               position="0 6.5 -2.5"
+               width="3" height="0.8" depth="0.2"
+               color="green"
+               cursor-listener>
+            <a-text position="0 0 0.11" 
+                    align="center" 
+                    value="START GAME" 
+                    color="white"
+                    scale="2 2 2">
+            </a-text>
+        </a-box>
+        
+        <!-- Lighting -->
+        <a-light type="ambient" color="#505050"></a-light>
+        <a-light type="directional" position="0 8 2" color="#ffffff" intensity="0.8"></a-light>
+        <a-light type="point" position="0 3 -1" color="#ffffff" intensity="0.5"></a-light>
+        
+        <!-- Camera -->
+        <a-camera position="0 1.8 0">
+            <a-cursor color="white" 
+                      raycaster="objects: [cursor-listener]; far: 20">
+            </a-cursor>
+        </a-camera>
+        
+        <!-- Environment -->
+        <a-sky color="#001122"></a-sky>
+        <a-plane position="0 0 -5" rotation="-90 0 0" width="20" height="20" color="#003366" opacity="0.3"></a-plane>
+    </a-scene>
+
+    <script>
+        // Game Variables
+        let gameScore = 0;
+        let matchedPairs = 0;
+        let flippedCards = [];
+        let gameActive = false;
+        let timeLeft = 60;
+        let timerInterval;
+        let gameStarted = false;
+
+        // Card colors and values for 10 pairs (20 cards total)
+        const cardPairs = [
+            { value: 'A', color: '#FF0000' }, // Red
+            { value: 'B', color: '#00FF00' }, // Green  
+            { value: 'C', color: '#0000FF' }, // Blue
+            { value: 'D', color: '#FFFF00' }, // Yellow
+            { value: 'E', color: '#FF00FF' }, // Magenta
+            { value: 'F', color: '#00FFFF' }, // Cyan
+            { value: 'G', color: '#FFA500' }, // Orange
+            { value: 'H', color: '#800080' }, // Purple
+            { value: 'I', color: '#FFC0CB' }, // Pink
+            { value: 'J', color: '#A52A2A' }  // Brown
+        ];
+
+        // Start Game Function
+        function startGame() {
+            if (gameStarted) return;
+            
+            console.log("Starting game...");
+            gameStarted = true;
+            gameActive = true;
+            
+            // Hide start button
+            document.querySelector('#startButton').setAttribute('visible', 'false');
+            
+            // Create cards
+            createAllCards();
+            
+            // Start timer
+            startTimer();
+            
+            // Update status
+            document.querySelector('#statusText').setAttribute('value', 'Find matching pairs!');
+        }
+
+        // Timer Functions
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.querySelector('#timerText').setAttribute('value', `Time: ${timeLeft}`);
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            gameActive = false;
+            document.querySelector('#statusText').setAttribute('value', `Time's Up! Final Score: ${gameScore}`);
+        }
+
+        function winGame() {
+            clearInterval(timerInterval);
+            gameActive = false;
+            document.querySelector('#statusText').setAttribute('value', `YOU WIN! Score: ${gameScore} | Time Left: ${timeLeft}`);
+        }
+
+        // Create All Cards
+        function createAllCards() {
+            console.log("Creating cards...");
+            
+            // Create array with pairs
+            let cards = [];
+            cardPairs.forEach(pair => {
+                cards.push(pair, pair); // Add each pair twice
+            });
+            
+            // Shuffle the cards
+            for (let i = cards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cards[i], cards[j]] = [cards[j], cards[i]];
+            }
+            
+            // Create cards in 4x5 grid
+            let cardIndex = 0;
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 5; col++) {
+                    const x = (col - 2) * 1.4;
+                    const y = (2.5 - row) * 1.6 + 1;
+                    const z = -3.5;
+                    
+                    createCard(x, y, z, cards[cardIndex].value, cards[cardIndex].color, cardIndex);
+                    cardIndex++;
+                }
+            }
+        }
+
+        // Create Individual Card
+        function createCard(x, y, z, cardValue, cardColor, id) {
+            const card = document.createElement('a-box');
+            card.setAttribute('id', `card-${id}`);
+            card.setAttribute('position', `${x} ${y} ${z}`);
+            card.setAttribute('width', '1.0');
+            card.setAttribute('height', '1.4');
+            card.setAttribute('depth', '0.15');
+            card.setAttribute('material', 'color: #333333');
+            card.setAttribute('cursor-listener', '');
+            
+            // Store card data
+            card.dataset.cardValue = cardValue;
+            card.dataset.cardColor = cardColor;
+            card.dataset.cardId = id;
+            
+            // Add click event
+            card.addEventListener('click', onCardClick);
+            
+            // Add card letter display
+            const cardText = document.createElement('a-text');
+            cardText.setAttribute('position', '0 0 0.08');
+            cardText.setAttribute('align', 'center');
+            cardText.setAttribute('color', 'white');
+            cardText.setAttribute('value', cardValue);
+            cardText.setAttribute('scale', '2 2 2');
+            cardText.setAttribute('visible', 'false');
+            cardText.setAttribute('id', `text-${id}`);
+            card.appendChild(cardText);
+            
+            document.querySelector('a-scene').appendChild(card);
+        }
+
+        // Card Click Handler
+        function onCardClick(event) {
+            if (!gameActive) return;
+            
+            const card = event.target;
+            console.log("Card clicked:", card.dataset.cardValue);
+            
+            // Don't allow clicking already flipped or matched cards
+            if (card.classList.contains('flipped') || card.classList.contains('matched')) {
+                return;
+            }
+            
+            // Don't allow more than 2 cards flipped at once
+            if (flippedCards.length >= 2) {
+                return;
+            }
+            
+            // Flip the card
+            flipCard(card);
+            flippedCards.push(card);
+            
+            // Check for match when 2 cards are flipped
+            if (flippedCards.length === 2) {
+                setTimeout(() => {
+                    checkForMatch();
+                }, 800);
+            }
+        }
+
+        // Flip Card Function - FIXED EASING
+        function flipCard(card) {
+            card.classList.add('flipped');
+            // Show the card's face
+            card.setAttribute('material', `color: ${card.dataset.cardColor}`);
+            card.setAttribute('animation', 'property: rotation; to: 0 180 0; dur: 500');
+            
+            // Show card letter
+            const cardText = card.querySelector('a-text');
+            if (cardText) {
+                setTimeout(() => {
+                    cardText.setAttribute('visible', 'true');
+                }, 250);
+            }
+        }
+
+        // Match Detection Logic
+        function checkForMatch() {
+            const [card1, card2] = flippedCards;
+            
+            console.log("Checking match:", card1.dataset.cardValue, "vs", card2.dataset.cardValue);
+            
+            // Check if cards have the same value
+            if (card1.dataset.cardValue === card2.dataset.cardValue) {
+                console.log("MATCH!");
+                handleMatch(card1, card2);
+            } else {
+                console.log("No match");
+                handleNoMatch(card1, card2);
+            }
+        }
+
+        // Handle Successful Match - FIXED ANIMATIONS
+        function handleMatch(card1, card2) {
+            // Add 10 points to score
+            gameScore += 10;
+            matchedPairs++;
+            
+            // Mark cards as matched
+            card1.classList.add('matched');
+            card2.classList.add('matched');
+            
+            // Update score display
+            updateScoreDisplay();
+            
+            // Simple disappear animation
+            setTimeout(() => {
+                card1.setAttribute('animation', 'property: scale; to: 0 0 0; dur: 600');
+                card2.setAttribute('animation', 'property: scale; to: 0 0 0; dur: 600');
+            }, 400);
+            
+            // Clear flipped cards array
+            flippedCards = [];
+            
+            // Check if game is won
+            if (matchedPairs === 10) {
+                setTimeout(winGame, 1000);
+            }
+        }
+
+        // Handle No Match - FIXED ANIMATIONS
+        function handleNoMatch(card1, card2) {
+            setTimeout(() => {
+                // Hide card letters
+                const text1 = card1.querySelector('a-text');
+                const text2 = card2.querySelector('a-text');
+                if (text1) text1.setAttribute('visible', 'false');
+                if (text2) text2.setAttribute('visible', 'false');
+                
+                // Flip cards back
+                card1.classList.remove('flipped');
+                card2.classList.remove('flipped');
+                
+                card1.setAttribute('material', 'color: #333333');
+                card2.setAttribute('material', 'color: #333333');
+                
+                card1.setAttribute('animation', 'property: rotation; to: 0 0 0; dur: 500');
+                card2.setAttribute('animation', 'property: rotation; to: 0 0 0; dur: 500');
+                
+                flippedCards = [];
+            }, 1200);
+        }
+
+        // Update Score Display
+        function updateScoreDisplay() {
+            document.querySelector('#scoreText').setAttribute('value', 
+                `Score: ${gameScore} | Matches: ${matchedPairs}/10`);
+        }
+
+        // Start Button Event Listener
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded");
+            setTimeout(() => {
+                const button = document.querySelector('#startButton');
+                if (button) {
+                    console.log("Start button found");
+                    button.addEventListener('click', startGame);
+                } else {
+                    console.log("Start button NOT found");
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
